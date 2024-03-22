@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.five.mapper.UserMapper">
+    <insert id="register" useGeneratedKeys="true" keyProperty="id">
+        insert into user(username, password)
+        values (#{username}, #{password})
+    </insert>
+
+
+    <!--    条件更新-->
+    <update id="update">
+        UPDATE user
+        <set>
+            <if test="username != null">username = #{username},</if>
+            <if test="password != null">password = #{password},</if>
+            <if test="gameTotalCounts != null">game_total_counts = #{gameTotalCounts},</if>
+            <if test="gamePersonCounts != null">game_person_counts = #{gamePersonCounts},</if>
+            <if test="gameAiCounts != null">game_ai_counts = #{gameAiCounts},</if>
+            <if test="gameSuccessCounts != null">game_success_counts = #{gameSuccessCounts},</if>
+            <if test="gameFailCounts != null">game_fail_counts = #{gameFailCounts},</if>
+            <if test="gameDeadHeatCounts != null">game_dead_heat_counts = #{gameDeadHeatCounts},</if>
+            <if test="deleted != null">deleted = #{deleted},</if>
+        </set>
+        WHERE id = #{id}
+        and deleted=0
+    </update>
+<!--    模糊查询-->
+    <select id="list" resultType="com.five.pojo.entity.User">
+        select * from user
+        <where>
+            <if test="username!=null and username!=''">
+                username LIKE CONCAT('%', #{username}, '%')
+            </if>
+            <if test="deleted!=null">
+                AND deleted=#{deleted}
+            </if>
+        </where>
+    </select>
+</mapper>

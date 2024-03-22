@@ -12,6 +12,8 @@ import com.five.pojo.pojo.OnlineFiveMessage;
 import com.five.pojo.vo.GameActor;
 import com.five.pojo.vo.UserSelectByIdVO;
 import com.five.utils.FiveGameUtil;
+import com.five.utils.GameResult;
+import com.five.utils.MessageType;
 import jakarta.websocket.*;
 import jakarta.websocket.server.PathParam;
 import jakarta.websocket.server.ServerEndpoint;
@@ -24,6 +26,9 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static com.five.utils.MessageType.*;
+import static com.five.utils.GameResult.*;
 
 
 @ServerEndpoint(value = "/game/online/five/{roomId}/{userId}", configurator = CustomSpringConfigurator.class)
@@ -65,16 +70,12 @@ public class OnlineFiveServer {
 
         // 根据房间中已有用户数量处理新连接
         switch (usersInRoom.size()) {
-            case 0:
-                initializeRoom(roomId, userId, session);
-                break;
-            case 1:
+            case 0 -> initializeRoom(roomId, userId, session);
+            case 1 -> {
                 addUserToRoom(roomId, userId, session);
                 startGameInRoom(roomId);
-                break;
-            default:
-                sendMessageForConfirm(session);
-                break;
+            }
+            default -> sendMessageForConfirm(session);
         }
     }
 
@@ -122,166 +123,161 @@ public class OnlineFiveServer {
     // 该方法用于接收前端发送的消息
     @OnMessage
     public void onMessage(Session session, @PathParam("roomId") Long roomId, @PathParam("userId") Long userId, String message) throws JsonProcessingException {
-
-        // 解析json数据
-        // 解析消息来确定type，
         OnlineFiveMessage onlineFiveMessage = objectMapper.readValue(message, OnlineFiveMessage.class);
-        Integer type = onlineFiveMessage.getType();
-
-        if (type == 1) {    // 1：确认进入，添加用户到room集合中
-            roomSessions.get(roomId).put(userId, new OnlineFiveActor("观战者", session));
-            sendToAllUserForRoomCount(roomId);
-            sendToAllUserForObserver(roomId, userId, session);
-            log.info("当前房间id为：{}，加入房间的用户为{}是观战者", roomId, userId);
-        } else if (type == 3) {   // 2：聊天消息，广播给所有用户（意味着点击发送按钮时前端先不用渲染）
-            sendToAllUser(3, roomId, onlineFiveMessage.getMessage(), userId, onlineFiveMessage.getRole(), 0);
-        } else if (type == 4) {   //4: 重头戏，要做三件事情。1：判断棋局状态并把消息广播出去。 2：维护game_details表。
-            // 3：结束了以后维护game_history和user表并移除所有session
-
-            Integer[][] board = roomBoards.get(roomId);// 获取这个房间对应的棋盘
-            // 更新棋盘状态
-            String steps = onlineFiveMessage.getMessage();
-            // System.out.println("步数" + steps);
-            // 对字符串处理拿到x和y坐标
-            String cleanedSteps = steps.replaceAll("[()]", ""); // 去除括号
-            String[] split = cleanedSteps.split(","); // 根据逗号分割
-            int color = Objects.equals(onlineFiveMessage.getRole(), "执黑棋者") ? 1 : 2;// 获取颜色
-            board[Integer.parseInt(split[0])][Integer.parseInt(split[1])] = color;// 更新棋局的状态
-            int gameOver = FiveGameUtil.isGameOver(board);
-            // 1：判断棋局状态并把消息广播出去
-            if (gameOver == 0) {    // 游戏还在进行中，直接广播出去
-                sendToAllUser(4, roomId, onlineFiveMessage.getMessage(), userId, onlineFiveMessage.getRole(), gameOver);
-            } else {    // 游戏已经结束了
-                UserSelectByIdVO userSelectByIdVO = userMapper.selectUserById(userId);
-                if (gameOver == 1) {   // 黑色棋子胜利
-                    GameHistory gameHistory = GameHistory.builder()
-                            .endTime(LocalDateTime.now())
-                            .gameResult(0)
-                            .build();
-                    gameHistoryMapper.update(gameHistory);
-                    sendToAllUser(4, roomId, onlineFiveMessage.getMessage(), userId, onlineFiveMessage.getRole(), gameOver);
-                    // 3：更新用户表
-                    // 更新胜利的那一方
-                    User user = User.builder()
-                            .gameTotalCounts(userSelectByIdVO.getGameTotalCounts() + 1)
-                            .gameSuccessCounts(userSelectByIdVO.getGameSuccessCounts() + 1)
-                            .id(userId)
-                            .build();
-                    userMapper.update(user);
-                    // 更新失败的那一方
-                    // 获取失败的用户id
-                    ConcurrentHashMap<Long, OnlineFiveActor> actors = roomSessions.get(roomId);
-                    Long defeatUserId = 0L;
-                    for (Long userId1 : actors.keySet()) {
-                        OnlineFiveActor actor = actors.get(userId1);
-                        if (Objects.equals(actor.getRole(), "执白棋者")) {
-                            defeatUserId = userId1;
-                        }
-                    }
-                    User userCopy = User.builder()
-                            .gameTotalCounts(userSelectByIdVO.getGameTotalCounts() + 1)
-                            .gameFailCounts(userSelectByIdVO.getGameSuccessCounts() + 1)
-                            .id(defeatUserId)
-                            .build();
-                    userMapper.update(userCopy);
-
-                } else if (gameOver == 2) {   // 白色棋子胜利
-                    GameHistory gameHistory = GameHistory.builder()
-                            .endTime(LocalDateTime.now())
-                            .gameResult(1)
-                            .build();
-                    gameHistoryMapper.update(gameHistory);
-                    // 更新用户表
-                    // 更新胜利的那一方
-                    User user = User.builder()
-                            .gameTotalCounts(userSelectByIdVO.getGameTotalCounts() + 1)
-                            .gameSuccessCounts(userSelectByIdVO.getGameSuccessCounts() + 1)
-                            .id(userId)
-                            .build();
-                    userMapper.update(user);
-                    // 更新失败的那一方
-                    // 获取失败的用户id
-                    ConcurrentHashMap<Long, OnlineFiveActor> actors = roomSessions.get(roomId);
-                    Long defeatUserId = 0L;
-                    for (Long userId1 : actors.keySet()) {
-                        OnlineFiveActor actor = actors.get(userId1);
-                        if (Objects.equals(actor.getRole(), "执黑棋者")) {
-                            defeatUserId = userId1;
-                        }
-                    }
-                    User userCopy = User.builder()
-                            .gameTotalCounts(userSelectByIdVO.getGameTotalCounts() + 1)
-                            .gameFailCounts(userSelectByIdVO.getGameSuccessCounts() + 1)
-                            .id(defeatUserId)
-                            .build();
-                    userMapper.update(userCopy);
-
-
-                    sendToAllUser(4, roomId, onlineFiveMessage.getMessage(), userId, onlineFiveMessage.getRole(), gameOver);
-                } else if (gameOver == 3) { // 平局
-                    GameHistory gameHistory = GameHistory.builder()
-                            .endTime(LocalDateTime.now())
-                            .gameResult(2)
-                            .build();
-                    gameHistoryMapper.update(gameHistory);
-
-                    sendToAllUser(4, roomId, onlineFiveMessage.getMessage(), userId, onlineFiveMessage.getRole(), gameOver);
-                    // 更新用户表
-                    ConcurrentHashMap<Long, OnlineFiveActor> actors = roomSessions.get(roomId);
-                    for (Long userId1 : actors.keySet()) {
-                        OnlineFiveActor actor = actors.get(userId1);
-                        if (!Objects.equals(actor.getRole(), "观战者")) {
-                            User userCopy = User.builder()
-                                    .gameTotalCounts(userSelectByIdVO.getGameTotalCounts() + 1)
-                                    .gameDeadHeatCounts(userSelectByIdVO.getGameSuccessCounts() + 1)
-                                    .id(userId1)
-                                    .build();
-                            userMapper.update(userCopy);
-                        }
-                    }
-
-                }
-
-
-                // 3：游戏结束，移除这个房间中的所有session和棋盘
-                ConcurrentHashMap<Long, OnlineFiveActor> room = roomSessions.get(roomId);
-                roomBoards.remove(roomId); // 清除棋盘
-                if (room != null) {
-                    room.forEach((key, actor) -> {
-                        actor.closeSession(); // 关闭连接
-                    });
-                    room.clear();   // 清除map中的session和其他信息
-                }
-
-            }
+        switch (onlineFiveMessage.getType()) {
+            case JOIN_ROOM -> handleJoinRoom(roomId, userId, session);
+            case CHAT_MESSAGE -> handleChatMessage(roomId, userId, onlineFiveMessage);
+            case MOVE -> handleMove(roomId, userId, onlineFiveMessage);
+            default -> log.warn("Unknown message type: {}", onlineFiveMessage.getType());
         }
-
-
     }
 
-    // 该方法用于关闭连接
-    @OnClose
-    public void onClose(Session session, @PathParam("roomId") Long roomId, @PathParam("userId") Long userId) throws IOException {
-        log.info("房间{}退出了用户{}", roomId, userId);
-        // 判断当前退出的是不是对战者
-        ConcurrentHashMap<Long, OnlineFiveActor> map = roomSessions.get(roomId);
-        String role = map.get(userId).getRole();
-        if (!Objects.equals(role, "观战者")) {
-            // 这样直接移除所有session
-            // 移除这个房间中的所有session和棋盘
-            ConcurrentHashMap<Long, OnlineFiveActor> room = roomSessions.get(roomId);
-            roomBoards.remove(roomId); // 清除棋盘
-            if (room != null) {
-                room.forEach((key, actor) -> {
-                    actor.closeSession(); // 关闭连接
-                });
-                room.clear();   // 清除map中的session和其他信息
+    private void handleChatMessage(Long roomId, Long userId, OnlineFiveMessage onlineFiveMessage) {
+        sendToAllUser(CHAT_MESSAGE, roomId, onlineFiveMessage.getMessage(), userId, onlineFiveMessage.getRole(), CONTINUE);
+    }
+
+    private void handleJoinRoom(Long roomId, Long userId, Session session) {
+        roomSessions.get(roomId).put(userId, new OnlineFiveActor("观战者", session));
+        sendToAllUserForRoomCount(roomId);
+        sendToAllUserForObserver(roomId, userId, session);
+        log.info("当前房间id为：{}，加入房间的用户为{}是观战者", roomId, userId);
+    }
+
+    private void handleMove(Long roomId, Long userId, OnlineFiveMessage onlineFiveMessage) {
+        try {
+            GameResult gameResult = updateBoardAndCheckGameState(roomId, onlineFiveMessage);
+
+            if (gameResult == GameResult.CONTINUE) {
+                broadcastMove(roomId, userId, onlineFiveMessage);
+            } else {
+                concludeGame(roomId, userId, gameResult, onlineFiveMessage);
             }
-            roomSessions.remove(roomId);    // 从map中移除
-        } else {
-            map.remove(userId);   // 移除当前这个用户信息
-            sendToAllUserForRoomCount(roomId);
+        } catch (Exception e) {
+            log.error("Error handling move: ", e);
+            // Handle the error appropriately
         }
+    }
+
+    private GameResult updateBoardAndCheckGameState(Long roomId, OnlineFiveMessage onlineFiveMessage) {
+        // Assuming you have a method to parse the message and update the board.
+        // Also assuming FiveGameUtil.isGameOver now returns an instance of GameResult.
+        updateBoard(roomId, onlineFiveMessage);
+        return FiveGameUtil.isGameOver(roomBoards.get(roomId));
+    }
+
+    private void updateBoard(Long roomId, OnlineFiveMessage onlineFiveMessage) {
+        Integer[][] board = roomBoards.get(roomId);// 获取这个房间对应的棋盘
+        // 更新棋盘状态
+        String steps = onlineFiveMessage.getMessage();
+        String cleanedSteps = steps.replaceAll("[()]", ""); // 去除括号
+        String[] split = cleanedSteps.split(","); // 根据逗号分割
+        int color = Objects.equals(onlineFiveMessage.getRole(), "执黑棋者") ? 1 : 2;// 获取颜色
+        board[Integer.parseInt(split[0])][Integer.parseInt(split[1])] = color;// 更新棋局的状态
+    }
+
+    private void broadcastMove(Long roomId, Long userId, OnlineFiveMessage onlineFiveMessage) {
+        sendToAllUser(MOVE, roomId, onlineFiveMessage.getMessage(), userId, onlineFiveMessage.getRole(), CONTINUE);
+    }
+
+    private void concludeGame(Long roomId, Long userId, GameResult gameResult, OnlineFiveMessage onlineFiveMessage) {
+        // Handle game conclusion, update records, send final messages etc.
+        handleGameOverActions(roomId, userId, gameResult ,onlineFiveMessage);
+        clearRoomAfterGame(roomId);
+    }
+
+    private void handleGameOverActions(Long roomId, Long userId, GameResult gameResult, OnlineFiveMessage onlineFiveMessage) {
+        // Record the game history
+        recordGameHistory(gameResult);
+
+        // Send final state message to all users
+        sendToAllUser(MOVE, roomId, onlineFiveMessage.getMessage(), userId, onlineFiveMessage.getRole(), gameResult);
+
+        // Update user statistics
+        updateUsersStatistics(roomId, gameResult);
+    }
+
+    private void recordGameHistory(GameResult gameResult) {
+        GameHistory gameHistory = GameHistory.builder()
+                .endTime(LocalDateTime.now())
+                .gameResult(gameResult.getValue())
+                .build();
+        gameHistoryMapper.update(gameHistory);
+    }
+
+    private void updateUsersStatistics(Long roomId, GameResult gameResult) {
+        ConcurrentHashMap<Long, OnlineFiveActor> actors = roomSessions.get(roomId);
+        actors.keySet().forEach(actorUserId -> {
+            UserSelectByIdVO userInfo = userMapper.selectUserById(actorUserId);
+            User user = User.builder()
+                    .id(actorUserId)
+                    .gameTotalCounts(userInfo.getGameTotalCounts() + 1)
+                    .build();
+
+            // Determine win/lose/draw count increment based on game result and user role
+            switch (gameResult) {
+                case BLACK_WIN:
+                case WHITE_WIN:
+                    if ((gameResult == GameResult.BLACK_WIN && actors.get(actorUserId).getRole().equals("执黑棋者")) ||
+                            (gameResult == GameResult.WHITE_WIN && actors.get(actorUserId).getRole().equals("执白棋者"))) {
+                        user.setGameSuccessCounts(userInfo.getGameSuccessCounts() + 1);
+                    } else {
+                        user.setGameFailCounts(userInfo.getGameFailCounts() + 1);
+                    }
+                    break;
+                case DRAW:
+                    user.setGameDeadHeatCounts(userInfo.getGameDeadHeatCounts() + 1);
+                    break;
+                default:
+                    // No action needed for CONTINUE
+                    break;
+            }
+
+            userMapper.update(user);
+        });
+    }
+    @OnClose
+    public void onClose(@PathParam("roomId") Long roomId, @PathParam("userId") Long userId) {
+        log.info("User {} left room {}", userId, roomId);
+
+        // Retrieve the room and check if it exists
+        ConcurrentHashMap<Long, OnlineFiveActor> roomActors = roomSessions.get(roomId);
+        if (roomActors == null) {
+            log.warn("Room {} does not exist.", roomId);
+            return;
+        }
+
+        // Check the role of the leaving user
+        OnlineFiveActor leavingActor = roomActors.get(userId);
+        if (leavingActor == null) {
+            log.warn("User {} not found in room {}.", userId, roomId);
+            return;
+        }
+        String role = leavingActor.getRole();
+
+        if (!"观战者".equals(role)) {
+            // If the user is not an observer, clear the room for the next game.
+            clearRoomAfterGame(roomId);
+            log.info("Cleared room {} after a player left.", roomId);
+        } else {
+            // If the user is an observer, just remove the user from the room.
+            roomActors.remove(userId);
+            sendToAllUserForRoomCount(roomId);
+            log.info("Removed observer {} from room {}. Updated room count.", userId, roomId);
+        }
+    }
+
+    private void clearRoomAfterGame(Long roomId)     {
+        // Clear the room's state for the next game.
+        ConcurrentHashMap<Long, OnlineFiveActor> room = roomSessions.get(roomId);
+        if (room != null) {
+            room.forEach((userId, actor) -> {
+                actor.closeSession(); // Try to close each session safely.
+            });
+            room.clear();   // Clear all sessions and other information from the map.
+        }
+        roomBoards.remove(roomId); // Remove the board associated with the room.
+        roomSessions.remove(roomId);    // Remove the room from the sessions map.
+        log.info("Room {} has been cleared and ready for the next game.", roomId);
     }
 
     // 该方法用于处理错误
@@ -291,107 +287,103 @@ public class OnlineFiveServer {
     }
 
 
-    // 该方法用于广播房间人数变化
+    // 该方法用于广播房间的人数变化
     private void sendToAllUserForRoomCount(Long roomId) {
-        // 获取当前房间的所有session
         ConcurrentHashMap<Long, OnlineFiveActor> sessionsMap = roomSessions.get(roomId);
-        log.info("广播人数变化{}", roomId);
+        if (sessionsMap == null) {
+            log.info("Room {} does not exist or has no sessions.", roomId);
+            return;
+        }
 
-        Enumeration<Long> keys = sessionsMap.keys();
-        ConcurrentHashMap<String, Object> map = new ConcurrentHashMap<>();
-        List<GameActor> list = Collections.synchronizedList(new ArrayList<>());
-        // 遍历集合
-        while (keys.hasMoreElements()) {
-            Long userId = keys.nextElement();
-            // 在这里处理每个key
-            // 根据id查询用户数据
+        log.info("Broadcasting room count change for room {}", roomId);
+
+        List<GameActor> list = new ArrayList<>();
+        sessionsMap.forEach((userId, actor) -> {
             UserSelectByIdVO userSelectByIdVO = userMapper.selectUserById(userId);
-            GameActor gameActor = new GameActor();
-            BeanUtils.copyProperties(userSelectByIdVO, gameActor);
-            OnlineFiveActor actor = sessionsMap.get(userId);
-            gameActor.setRole(actor.getRole());
-            list.add(gameActor);
-        }
-        map.put("type", 6);
-        map.put("actors", list);
-        try {
-            String jsonText = objectMapper.writeValueAsString(map);
-            System.out.println("广播人数变化的文本：" + jsonText);
-            // 转换成json
-            keys = sessionsMap.keys();
-            while (keys.hasMoreElements()) {
-                Long userId = keys.nextElement();
-                OnlineFiveActor actor = sessionsMap.get(userId);
-                if (actor != null) {
-                    log.info("向用户广播：{}", userId);
-                    actor.getSession().getBasicRemote().sendText(jsonText);
-                }
+            if (userSelectByIdVO != null) {
+                GameActor gameActor = new GameActor();
+                BeanUtils.copyProperties(userSelectByIdVO, gameActor);
+                gameActor.setRole(actor.getRole());
+                list.add(gameActor);
             }
-        } catch (Exception e) {
-            log.error("广播人数变化时出现了异常:{}", e.getMessage());
+        });
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("type", ROOM_COUNT_UPDATE.getValue());
+        map.put("actors", list);
+
+        String jsonText;
+        try {
+            jsonText = objectMapper.writeValueAsString(map);
+            log.debug("Broadcasting room count change text: {}", jsonText);
+
+            sessionsMap.values().forEach(actor -> {
+                try {
+                    actor.getSession().getBasicRemote().sendText(jsonText);
+                } catch (IOException e) {
+                    log.error("Error broadcasting room count change to user {}: {}", actor.getRole(), e.getMessage(), e);
+                }
+            });
+        } catch (JsonProcessingException e) {
+            log.error("Error serializing room count change message: {}", e.getMessage(), e);
         }
-
-
     }
 
-
-    // 该方法用于向用户发送消息 1：确认进入房间 2：确认角色
+    // This method sends a message to the user to confirm entrance to the room and assign a role
     private void sendUserActorMessage(Session session, String role, Long gameId) {
         if (session != null && session.isOpen()) {
-            HashMap<Object, Object> map = new HashMap<>();
-            map.put("type", 2);
+            HashMap<String, Object> map = new HashMap<>();
+            map.put("type", USER_ACTOR_CONFIRM.getValue());
             map.put("role", role);
             map.put("gameId", gameId);
             try {
                 String jsonMessage = objectMapper.writeValueAsString(map);
                 session.getBasicRemote().sendText(jsonMessage);
             } catch (IOException e) {
-                log.error("向用户发送警告信息时出现了异常");
+                log.error("Exception occurred while sending role confirmation message to the user{}: {}",role,e.getMessage(), e);
             }
         }
     }
 
-
-    // 该方法用于向所有观战者发送消息
+    // This method sends a message to all observers
     private void sendToAllUserForObserver(Long roomId, Long userId, Session session) {
-
         try {
-            // 只给新加的观战者发
-            // 组装数据
-            HashMap<Object, Object> map = new HashMap<>();
-            map.put("type", 7);
+            // Sending the message only to the newly added observers
+            // Assembling the data
+            HashMap<String, Object> map = new HashMap<>();
+            map.put("type", OBSERVER_UPDATE.getValue());
             map.put("id", userId);
             map.put("role", "观战者");
             map.put("message", roomBoards.get(roomId));
-            int gameOver = FiveGameUtil.isGameOver(roomBoards.get(roomId));
+            GameResult gameOver = FiveGameUtil.isGameOver(roomBoards.get(roomId));
             map.put("isGameOver", gameOver);
             String jsonMessage = objectMapper.writeValueAsString(map);
-            // 服务器向客户端发送消息
+            // Server sends the message to the client
             session.getBasicRemote().sendText(jsonMessage);
         } catch (Exception e) {
-            log.error("传输数据发生异常");
+            log.error("An exception occurred during data transmission", e);
         }
-
-
     }
 
-    // 该方法用于提示用户是否还要继续加入房间——房间人数大于2的时候
+
+    // This method prompts the user to confirm whether they want to continue joining a room
+    // when the room's player count exceeds 2
     private void sendMessageForConfirm(Session session) {
         if (session != null && session.isOpen()) {
-            HashMap<String, Integer> map = new HashMap<>();
-            map.put("type", 0);
+            HashMap<String, Object> map = new HashMap<>();
+            map.put("type", CONFIRM_JOIN_ROOM.getValue());
             try {
                 String jsonMessage = objectMapper.writeValueAsString(map);
                 session.getBasicRemote().sendText(jsonMessage);
             } catch (IOException e) {
-                log.error("向用户发送警告信息时出现了异常");
+                log.error("An error occurred while sending a warning message to the user", e);
             }
         }
-
     }
 
+
     // 该方法用于向所有用户发送消息
-    public void sendToAllUser(Integer type, Long roomId, String message, Long userId, String role, Integer isGameOver) {
+    public void sendToAllUser(MessageType type, Long roomId, String message, Long userId, String role, GameResult isGameOver) {
         // 获取当前房间的所有session
         ConcurrentHashMap<Long, OnlineFiveActor> sessionsMap = roomSessions.get(roomId);
         Collection<OnlineFiveActor> sessionUsers = sessionsMap.values();   // 获取所有值
@@ -405,7 +397,7 @@ public class OnlineFiveServer {
                 map.put("message", message);
                 map.put("isGameOver", isGameOver);
                 String jsonMessage = objectMapper.writeValueAsString(map);
-                log.info("josnMessage:{}", jsonMessage);
+                log.info("jsonMessage:{}", jsonMessage);
                 // 服务器向客户端发送消息
                 session.getSession().getBasicRemote().sendText(jsonMessage);
             } catch (Exception e) {

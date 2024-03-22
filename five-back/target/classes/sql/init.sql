@@ -23,8 +23,6 @@ create table user
     username              varchar(15)                                                                                                        not null,
     password              varchar(15)                                                                                                        not null,
     game_total_counts     int          default 0                                                                                             not null,
-    game_person_counts    int          default 0                                                                                             not null,
-    game_ai_counts        int          default 0                                                                                             not null,
     game_success_counts   int          default 0                                                                                             not null,
     game_fail_counts      int          default 0                                                                                             not null,
     game_dead_heat_counts int          default 0                                                                                             not null,

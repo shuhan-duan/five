@@ -1,10 +1,11 @@
 package com.five.utils;
+import static com.five.utils.GameResult.*;
 
 public class FiveGameUtil {
 
-    public static int isGameOver(Integer[][] chessBoard) {
+    public static GameResult isGameOver(Integer[][] chessBoard) {
         if (chessBoard == null) {
-            return 0;
+            return CONTINUE;
         }
         boolean isDeadHeat = true;
 
@@ -18,14 +19,14 @@ public class FiveGameUtil {
                         checkDirection(chessBoard, x, y, 0, 1, player) ||
                         checkDirection(chessBoard, x, y, 1, 1, player) ||
                         checkDirection(chessBoard, x, y, 1, -1, player))) {
-                    return player;  // 返回获胜方
+                    return fromInt(player);
                 }
             }
         }
         if (isDeadHeat) {
-            return 3;   // 平局
+            return DRAW;
         }
-        return 0;  // 游戏尚未结束
+        return CONTINUE;
     }
 
 

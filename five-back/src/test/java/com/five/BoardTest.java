@@ -1,14 +1,9 @@
 package com.five;
 
 import com.five.utils.FiveGameUtil;
+import com.five.utils.GameResult;
 import org.junit.jupiter.api.Test;
 
-/**
- * @program: five
- * @author: AlbertZhang
- * @create: 2023-12-19 21:43
- * @description:
- **/
 public class BoardTest {
     @Test
     public void test() {
@@ -23,8 +18,8 @@ public class BoardTest {
             board[i][1] = 2;
         }
         board[1][1] = 0;
-        int game = FiveGameUtil.isGameOver(board);
-        System.out.println(game);
+        GameResult game = FiveGameUtil.isGameOver(board);
+        System.out.println(game.name());
 
     }
 }

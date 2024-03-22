@@ -3,6 +3,8 @@ import static com.five.utils.GameResult.*;
 
 public class FiveGameUtil {
 
+    private static final int WIN_CONDITION = 5;
+
     public static GameResult isGameOver(Integer[][] chessBoard) {
         if (chessBoard == null) {
             return CONTINUE;
@@ -14,50 +16,46 @@ public class FiveGameUtil {
                 Integer player = chessBoard[x][y];
                 if (player == null || player == 0) {
                     isDeadHeat = false;
+                    continue;
                 }
-                if (player != 0 && (checkDirection(chessBoard, x, y, 1, 0, player) ||
-                        checkDirection(chessBoard, x, y, 0, 1, player) ||
-                        checkDirection(chessBoard, x, y, 1, 1, player) ||
-                        checkDirection(chessBoard, x, y, 1, -1, player))) {
-                    return fromInt(player);
+                // Check if the current player has five in a row in any direction.
+                if (player != 0 && (hasFiveInARow(chessBoard, x, y, 1, 0, player) ||
+                        hasFiveInARow(chessBoard, x, y, 0, 1, player) ||
+                        hasFiveInARow(chessBoard, x, y, 1, 1, player) ||
+                        hasFiveInARow(chessBoard, x, y, 1, -1, player))) {
+                    return getGameResultFromPlayer(player);
                 }
             }
         }
-        if (isDeadHeat) {
-            return DRAW;
-        }
-        return CONTINUE;
+        return isDeadHeat ? DRAW : CONTINUE;
     }
 
-
-    private static boolean checkDirection(Integer[][] chessBoard, int x, int y, int deltaX, int deltaY, Integer player) {
+    private static boolean hasFiveInARow(Integer[][] chessBoard, int x, int y, int deltaX, int deltaY, Integer player) {
         int count = 1;
 
-        for (int i = 1; i < 5; i++) {
-            int newX = x + i * deltaX;
-            int newY = y + i * deltaY;
-            if (!isValidPoint(chessBoard, newX, newY) || chessBoard[newX][newY] != player) {
-                break;
-            }
-            count++;
-        }
+        count += countConsecutivePieces(chessBoard, x, y, deltaX, deltaY, player);
+        count += countConsecutivePieces(chessBoard, x, y, -deltaX, -deltaY, player);
 
-        for (int i = 1; i < 5; i++) {
-            int newX = x - i * deltaX;
-            int newY = y - i * deltaY;
-            if (!isValidPoint(chessBoard, newX, newY) || chessBoard[newX][newY] != player) {
-                break;
-            }
-            count++;
-        }
-
-        return count >= 5;
+        return count >= WIN_CONDITION;
     }
 
+    private static int countConsecutivePieces(Integer[][] chessBoard, int x, int y, int deltaX, int deltaY, Integer player) {
+        int count = 0;
+        for (int i = 1; i < WIN_CONDITION; i++) {
+            int newX = x + i * deltaX;
+            int newY = y + i * deltaY;
+            if (!isValidPoint(chessBoard, newX, newY) || !player.equals(chessBoard[newX][newY])) {
+                break;
+            }
+            count++;
+        }
+        return count;
+    }
 
     private static boolean isValidPoint(Integer[][] chessBoard, int x, int y) {
         return x >= 0 && x < chessBoard.length && y >= 0 && y < chessBoard[0].length;
     }
+
 
 }
 

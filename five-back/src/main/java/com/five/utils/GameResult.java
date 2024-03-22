@@ -16,7 +16,7 @@ public enum GameResult {
         return value;
     }
 
-    public static GameResult fromInt(int i) {
+    public static GameResult getGameResultFromPlayer(int i) {
         for (GameResult result : GameResult.values()) {
             if (result.getValue() == i) {
                 return result;

@@ -165,7 +165,6 @@ public class OnlineFiveServer {
                     User user = User.builder()
                             .gameTotalCounts(userSelectByIdVO.getGameTotalCounts() + 1)
                             .gameSuccessCounts(userSelectByIdVO.getGameSuccessCounts() + 1)
-                            .gamePersonCounts(userSelectByIdVO.getGamePersonCounts() + 1)
                             .id(userId)
                             .build();
                     userMapper.update(user);
@@ -182,7 +181,6 @@ public class OnlineFiveServer {
                     User userCopy = User.builder()
                             .gameTotalCounts(userSelectByIdVO.getGameTotalCounts() + 1)
                             .gameFailCounts(userSelectByIdVO.getGameSuccessCounts() + 1)
-                            .gamePersonCounts(userSelectByIdVO.getGamePersonCounts() + 1)
                             .id(defeatUserId)
                             .build();
                     userMapper.update(userCopy);
@@ -198,7 +196,6 @@ public class OnlineFiveServer {
                     User user = User.builder()
                             .gameTotalCounts(userSelectByIdVO.getGameTotalCounts() + 1)
                             .gameSuccessCounts(userSelectByIdVO.getGameSuccessCounts() + 1)
-                            .gamePersonCounts(userSelectByIdVO.getGamePersonCounts() + 1)
                             .id(userId)
                             .build();
                     userMapper.update(user);
@@ -215,7 +212,6 @@ public class OnlineFiveServer {
                     User userCopy = User.builder()
                             .gameTotalCounts(userSelectByIdVO.getGameTotalCounts() + 1)
                             .gameFailCounts(userSelectByIdVO.getGameSuccessCounts() + 1)
-                            .gamePersonCounts(userSelectByIdVO.getGamePersonCounts() + 1)
                             .id(defeatUserId)
                             .build();
                     userMapper.update(userCopy);
@@ -238,7 +234,6 @@ public class OnlineFiveServer {
                             User userCopy = User.builder()
                                     .gameTotalCounts(userSelectByIdVO.getGameTotalCounts() + 1)
                                     .gameDeadHeatCounts(userSelectByIdVO.getGameSuccessCounts() + 1)
-                                    .gamePersonCounts(userSelectByIdVO.getGamePersonCounts() + 1)
                                     .id(userId1)
                                     .build();
                             userMapper.update(userCopy);

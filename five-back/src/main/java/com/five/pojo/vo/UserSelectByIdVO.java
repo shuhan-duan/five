@@ -10,11 +10,7 @@ public class UserSelectByIdVO {
     private String username;
 
     private int gameTotalCounts;
-
-    private int gamePersonCounts;
-
-    private int gameAiCounts;
-
+    
     private int gameSuccessCounts;
 
     private int gameFailCounts;

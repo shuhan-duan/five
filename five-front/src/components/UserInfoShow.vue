@@ -43,12 +43,6 @@ const onLogout = () => { // Se déconnecter
           <span>Jeux totaux</span><span>{{ userInfo.gameTotalCounts }}</span>
         </div>
         <div>
-          <span>Jeux entre amis</span><span>{{ userInfo.gamePersonCounts }}</span>
-        </div>
-        <div>
-          <span>Jeux contre l'IA</span><span>{{ userInfo.gameAiCounts }}</span>
-        </div>
-        <div>
           <span>Victoires</span><span>{{ userInfo.gameSuccessCounts}}</span>
         </div>
         <div>

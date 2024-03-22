@@ -6,7 +6,7 @@
     <div class="notFound">
         404 not found
     </div>
-    <div style="font-size: 30px;">你没事吧？(≖_≖ )</div>
+    <div style="font-size: 30px;">404 not found</div>
 </template>
 <style scoped>
 .notFound {

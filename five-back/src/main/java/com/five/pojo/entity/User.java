@@ -19,10 +19,6 @@ public class User {
 
     private Integer gameTotalCounts;
 
-    private Integer gamePersonCounts;
-
-    private Integer gameAiCounts;
-
     private Integer gameSuccessCounts;
 
     private Integer gameFailCounts;

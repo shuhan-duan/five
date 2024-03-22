@@ -13,10 +13,6 @@ const routes = [
     meta: { requireAuth: false } // Indicate that authentication is not required
   },
   {
-    path: '/boardAI',
-    component: () => import('@/views/BoardAIWindow.vue')// AI Board view
-  },
-  {
     path: '/boardFriend',
     component: () => import('@/views/BoardFriendWindow.vue')// Friend Board view
   },

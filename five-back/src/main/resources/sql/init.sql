@@ -14,7 +14,6 @@ create table game_history
     room_id     mediumtext        null
 );
 
-# 用户表，存储用户相关信息
 
 create table user
 (

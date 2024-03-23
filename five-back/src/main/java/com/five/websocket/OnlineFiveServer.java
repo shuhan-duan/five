@@ -217,8 +217,8 @@ public class OnlineFiveServer {
             switch (gameResult) {
                 case BLACK_WIN:
                 case WHITE_WIN:
-                    if ((gameResult == GameResult.BLACK_WIN && actors.get(actorUserId).getRole().equals("执黑棋者")) ||
-                            (gameResult == GameResult.WHITE_WIN && actors.get(actorUserId).getRole().equals("执白棋者"))) {
+                    if ((gameResult == BLACK_WIN && actors.get(actorUserId).getRole().equals("执黑棋者")) ||
+                            (gameResult == WHITE_WIN && actors.get(actorUserId).getRole().equals("执白棋者"))) {
                         user.setGameSuccessCounts(userInfo.getGameSuccessCounts() + 1);
                     } else {
                         user.setGameFailCounts(userInfo.getGameFailCounts() + 1);

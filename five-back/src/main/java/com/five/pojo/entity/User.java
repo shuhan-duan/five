@@ -17,13 +17,13 @@ public class User {
 
     private String password;
 
-    private Integer gameTotalCounts;
+    private Integer game_total_counts;
 
-    private Integer gameSuccessCounts;
+    private Integer game_success_counts;
 
-    private Integer gameFailCounts;
+    private Integer game_fail_counts;
 
-    private Integer gameDeadHeatCounts;
+    private Integer game_dead_heat_counts;
 
     private Integer deleted;
 }

@@ -40,16 +40,16 @@ const onLogout = () => { // Se déconnecter
     <el-card>
       <div class="count">
         <div>
-          <span>Jeux totaux</span><span>{{ userInfo.gameTotalCounts }}</span>
+          <span>Jeux totaux</span><span>{{ userInfo.game_total_counts }}</span>
         </div>
         <div>
-          <span>Victoires</span><span>{{ userInfo.gameSuccessCounts}}</span>
+          <span>Victoires</span><span>{{ userInfo.game_success_counts}}</span>
         </div>
         <div>
-          <span>Défaites</span><span>{{ userInfo.gameFailCounts }}</span>
+          <span>Défaites</span><span>{{ userInfo.game_fail_counts }}</span>
         </div>
         <div>
-          <span>Nuls</span><span>{{ userInfo.gameDeadHeatCounts }}</span>
+          <span>Nuls</span><span>{{ userInfo.game_dead_heat_counts }}</span>
         </div>
       </div>
     </el-card>

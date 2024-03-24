@@ -44,13 +44,13 @@ public class OnlineFiveServer {
     private UserMapper userMapper;
     
 
-    // 使用 ConcurrentHashMap 来存储房间id和房间所关联的用户信息
+    // Use ConcurrentHashMap to store the room ID and the associated user information
     private static ConcurrentHashMap<Long, ConcurrentHashMap<Long, OnlineFiveActor>> roomSessions = new ConcurrentHashMap<>();
-    // 存储每个房间对应的棋盘
+    // Store the chessboard for each room
     private static ConcurrentHashMap<Long, Integer[][]> roomBoards = new ConcurrentHashMap<>();
 
 
-    // 暴露出去供服务器性能监控模块访问
+    // Expose for server performance monitoring module access
     public ConcurrentHashMap<Long, ConcurrentHashMap<Long, OnlineFiveActor>> getRoomSessions() {
         return roomSessions;
     }
@@ -59,16 +59,16 @@ public class OnlineFiveServer {
         return roomBoards;
     }
 
-    private ObjectMapper objectMapper = new ObjectMapper(); // Jackson的对象映射器
+    private ObjectMapper objectMapper = new ObjectMapper(); // Object mapper for Jackson
 
 
-    // 该方法用于建立连接
+    // This method is used to establish a connection
     @OnOpen
     public void onOpen(Session session, @PathParam("roomId") Long roomId, @PathParam("userId") Long userId) {
-        roomSessions.putIfAbsent(roomId, new ConcurrentHashMap<>()); // 确保房间存在
+        roomSessions.putIfAbsent(roomId, new ConcurrentHashMap<>()); // Ensure the room exists
         ConcurrentHashMap<Long, OnlineFiveActor> usersInRoom = roomSessions.get(roomId);
-
-        // 根据房间中已有用户数量处理新连接
+        log.info("The room id is: {}, the user is {}, onOpen()", roomId, userId);
+        // Handle new connection based on the number of existing users in the room
         switch (usersInRoom.size()) {
             case 0 -> initializeRoom(roomId, userId, session);
             case 1 -> {
@@ -82,24 +82,24 @@ public class OnlineFiveServer {
     private void initializeRoom(Long roomId, Long userId, Session session) {
         Integer[][] board = new Integer[15][15];
         for (Integer[] row : board) {
-            Arrays.fill(row, 0); // 初始化棋盘
+            Arrays.fill(row, 0); // Initialize the board
         }
-        roomBoards.put(roomId, board); // 存储棋盘
+        roomBoards.put(roomId, board); // Store the board
 
-        roomSessions.get(roomId).put(userId, new OnlineFiveActor("执黑棋者", session));
-        log.info("初始化房间，当前房间id为：{}，建立房间的用户{}执黑子", roomId, userId);
+        roomSessions.get(roomId).put(userId, new OnlineFiveActor("Joueur Noir", session));
+        log.info("The current room id is: {}, the user joining the room is {}, black", roomId, userId);
     }
 
     private void addUserToRoom(Long roomId, Long userId, Session session) {
-        roomSessions.get(roomId).put(userId, new OnlineFiveActor("执白棋者", session));
-        log.info("当前房间id为：{}，加入房间的用户为{}执白子", roomId, userId);
+        roomSessions.get(roomId).put(userId, new OnlineFiveActor("Joueur Blanc", session));
+        log.info("The current room id is: {}, the user joining the room is {}, white", roomId, userId);
     }
 
     private void startGameInRoom(Long roomId) {
         ConcurrentHashMap<Long, OnlineFiveActor> map = roomSessions.get(roomId);
         List<Long> userIds = new ArrayList<>(map.keySet());
         Long blackId = userIds.get(0);
-        Long whiteId = userIds.size() > 1 ? userIds.get(1) : null; // 防止出现只有一个用户的情况
+        Long whiteId = userIds.size() > 1 ? userIds.get(1) : null; // Prevents the case of having only one user
 
         Session blackSession = map.get(blackId).getSession();
         Session whiteSession = whiteId != null ? map.get(whiteId).getSession() : null;
@@ -113,14 +113,14 @@ public class OnlineFiveServer {
         gameHistoryMapper.insert(gameHistory);
 
         if (whiteSession != null) {
-            sendUserActorMessage(whiteSession, "执白棋者", gameHistory.getId());
+            sendUserActorMessage(whiteSession, "Joueur Blanc", gameHistory.getId());
         }
-        sendUserActorMessage(blackSession, "执黑棋者", gameHistory.getId());
+        sendUserActorMessage(blackSession, "Joueur Noir", gameHistory.getId());
         sendToAllUserForRoomCount(roomId);
     }
 
 
-    // 该方法用于接收前端发送的消息
+    // This method is used to receive messages sent by the frontend
     @OnMessage
     public void onMessage(Session session, @PathParam("roomId") Long roomId, @PathParam("userId") Long userId, String message) throws JsonProcessingException {
         OnlineFiveMessage onlineFiveMessage = objectMapper.readValue(message, OnlineFiveMessage.class);
@@ -137,10 +137,10 @@ public class OnlineFiveServer {
     }
 
     private void handleJoinRoom(Long roomId, Long userId, Session session) {
-        roomSessions.get(roomId).put(userId, new OnlineFiveActor("观战者", session));
+        roomSessions.get(roomId).put(userId, new OnlineFiveActor("Spectateur", session));
         sendToAllUserForRoomCount(roomId);
         sendToAllUserForObserver(roomId, userId, session);
-        log.info("当前房间id为：{}，加入房间的用户为{}是观战者", roomId, userId);
+        log.info("The current room id is: {}, the user joining the room is {} and is an Observer", roomId, userId);
     }
 
     private void handleMove(Long roomId, Long userId, OnlineFiveMessage onlineFiveMessage) {
@@ -166,13 +166,13 @@ public class OnlineFiveServer {
     }
 
     private void updateBoard(Long roomId, OnlineFiveMessage onlineFiveMessage) {
-        Integer[][] board = roomBoards.get(roomId);// 获取这个房间对应的棋盘
-        // 更新棋盘状态
+        Integer[][] board = roomBoards.get(roomId);// Get the board corresponding to this room
+        // Update the board state
         String steps = onlineFiveMessage.getMessage();
-        String cleanedSteps = steps.replaceAll("[()]", ""); // 去除括号
-        String[] split = cleanedSteps.split(","); // 根据逗号分割
-        int color = Objects.equals(onlineFiveMessage.getRole(), "执黑棋者") ? 1 : 2;// 获取颜色
-        board[Integer.parseInt(split[0])][Integer.parseInt(split[1])] = color;// 更新棋局的状态
+        String cleanedSteps = steps.replaceAll("[()]", ""); // Remove parentheses
+        String[] split = cleanedSteps.split(","); // Split by comma
+        int color = Objects.equals(onlineFiveMessage.getRole(), "Black Player") ? 1 : 2;// Get the color
+        board[Integer.parseInt(split[0])][Integer.parseInt(split[1])] = color;// Update the state of the board
     }
 
     private void broadcastMove(Long roomId, Long userId, OnlineFiveMessage onlineFiveMessage) {
@@ -210,22 +210,22 @@ public class OnlineFiveServer {
             UserSelectByIdVO userInfo = userMapper.selectUserById(actorUserId);
             User user = User.builder()
                     .id(actorUserId)
-                    .gameTotalCounts(userInfo.getGameTotalCounts() + 1)
+                    .game_total_counts(userInfo.getGame_total_counts() + 1)
                     .build();
 
             // Determine win/lose/draw count increment based on game result and user role
             switch (gameResult) {
                 case BLACK_WIN:
                 case WHITE_WIN:
-                    if ((gameResult == BLACK_WIN && actors.get(actorUserId).getRole().equals("执黑棋者")) ||
-                            (gameResult == WHITE_WIN && actors.get(actorUserId).getRole().equals("执白棋者"))) {
-                        user.setGameSuccessCounts(userInfo.getGameSuccessCounts() + 1);
+                    if ((gameResult == BLACK_WIN && actors.get(actorUserId).getRole().equals("Joueur Noir")) ||
+                            (gameResult == WHITE_WIN && actors.get(actorUserId).getRole().equals("Joueur Blanc"))) {
+                        user.setGame_success_counts(userInfo.getGame_success_counts() + 1);
                     } else {
-                        user.setGameFailCounts(userInfo.getGameFailCounts() + 1);
+                        user.setGame_fail_counts(userInfo.getGame_fail_counts() + 1);
                     }
                     break;
                 case DRAW:
-                    user.setGameDeadHeatCounts(userInfo.getGameDeadHeatCounts() + 1);
+                    user.setGame_dead_heat_counts(userInfo.getGame_dead_heat_counts() + 1);
                     break;
                 default:
                     // No action needed for CONTINUE
@@ -254,7 +254,7 @@ public class OnlineFiveServer {
         }
         String role = leavingActor.getRole();
 
-        if (!"观战者".equals(role)) {
+        if (!"Spectateur".equals(role)) {
             // If the user is not an observer, clear the room for the next game.
             clearRoomAfterGame(roomId);
             log.info("Cleared room {} after a player left.", roomId);
@@ -280,14 +280,13 @@ public class OnlineFiveServer {
         log.info("Room {} has been cleared and ready for the next game.", roomId);
     }
 
-    // 该方法用于处理错误
+    // This method is used to handle errors
     @OnError
     public void onError(@PathParam("roomId") Long roomId, @PathParam("userId") Long userId, Throwable throwable) {
-        log.error("房间{}，用户{}的连接发生错误", roomId, userId, throwable);
+        log.error("Error occurred in room {}, user {}'s connection", roomId, userId, throwable);
     }
 
-
-    // 该方法用于广播房间的人数变化
+    // This method is used to broadcast the change in the number of users in the room
     private void sendToAllUserForRoomCount(Long roomId) {
         ConcurrentHashMap<Long, OnlineFiveActor> sessionsMap = roomSessions.get(roomId);
         if (sessionsMap == null) {
@@ -353,7 +352,7 @@ public class OnlineFiveServer {
             HashMap<String, Object> map = new HashMap<>();
             map.put("type", OBSERVER_UPDATE.getValue());
             map.put("id", userId);
-            map.put("role", "观战者");
+            map.put("role", "Spectateur");
             map.put("message", roomBoards.get(roomId));
             GameResult gameOver = FiveGameUtil.isGameOver(roomBoards.get(roomId));
             map.put("isGameOver", gameOver);
@@ -371,7 +370,7 @@ public class OnlineFiveServer {
     private void sendMessageForConfirm(Session session) {
         if (session != null && session.isOpen()) {
             HashMap<String, Object> map = new HashMap<>();
-            map.put("type", CONFIRM_JOIN_ROOM.getValue());
+            map.put("type", WARNING.getValue());
             try {
                 String jsonMessage = objectMapper.writeValueAsString(map);
                 session.getBasicRemote().sendText(jsonMessage);
@@ -382,26 +381,26 @@ public class OnlineFiveServer {
     }
 
 
-    // 该方法用于向所有用户发送消息
+    // This method is used to send messages to all users
     public void sendToAllUser(MessageType type, Long roomId, String message, Long userId, String role, GameResult isGameOver) {
-        // 获取当前房间的所有session
+        // Get all sessions in the current room
         ConcurrentHashMap<Long, OnlineFiveActor> sessionsMap = roomSessions.get(roomId);
-        Collection<OnlineFiveActor> sessionUsers = sessionsMap.values();   // 获取所有值
+        Collection<OnlineFiveActor> sessionUsers = sessionsMap.values();   // Get all values
         for (OnlineFiveActor session : sessionUsers) {
             try {
-                // 组装数据
+                // Assemble data
                 HashMap<Object, Object> map = new HashMap<>();
-                map.put("type", type);
+                map.put("type", type.getValue());
                 map.put("id", userId);
                 map.put("role", role);
                 map.put("message", message);
-                map.put("isGameOver", isGameOver);
+                map.put("isGameOver", isGameOver.getValue());
                 String jsonMessage = objectMapper.writeValueAsString(map);
                 log.info("jsonMessage:{}", jsonMessage);
-                // 服务器向客户端发送消息
+                // Server sends message to client
                 session.getSession().getBasicRemote().sendText(jsonMessage);
             } catch (Exception e) {
-                log.error("传输数据发生异常");
+                log.error("An exception occurred during data transmission");
             }
         }
     }

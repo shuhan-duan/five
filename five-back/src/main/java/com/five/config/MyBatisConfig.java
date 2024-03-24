@@ -16,7 +16,6 @@ public class MyBatisConfig {
         sessionFactory.setDataSource(dataSource);
         sessionFactory.setMapperLocations(
                 new PathMatchingResourcePatternResolver().getResources("classpath:mapper/*.xml"));
-        // Optional: Specify the package for type aliases (if you use them)
         sessionFactory.setTypeAliasesPackage("com.five.pojo.entity");
         return sessionFactory;
     }

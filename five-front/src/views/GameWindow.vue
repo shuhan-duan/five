@@ -1,6 +1,4 @@
 <script setup>
-import { ref, watch, computed } from 'vue'
-import { ElMessage } from 'element-plus'
 import router from '@/router'
 
 </script>
@@ -55,7 +53,7 @@ div {
 
 .button {
     width: 250px;
-    height: 250px;
+    height: 180px;
     background-color: transparent !important;
     border-color: transparent !important;
 }

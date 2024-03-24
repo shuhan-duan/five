@@ -9,12 +9,12 @@ public class UserSelectByIdVO {
 
     private String username;
 
-    private int gameTotalCounts;
+    private int game_total_counts;
     
-    private int gameSuccessCounts;
+    private int game_success_counts;
 
-    private int gameFailCounts;
+    private int game_fail_counts;
 
-    private int gameDeadHeatCounts;
+    private int game_dead_heat_counts;
 
 }

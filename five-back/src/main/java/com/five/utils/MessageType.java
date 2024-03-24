@@ -1,7 +1,7 @@
 package com.five.utils;
 
 public enum MessageType {
-    CONFIRM_JOIN_ROOM(0),
+    WARNING(0),
     JOIN_ROOM(1),
     USER_ACTOR_CONFIRM(2),
     CHAT_MESSAGE(3),

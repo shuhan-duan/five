@@ -95,180 +95,213 @@ const handleKeyDown = (index, event) => {
   }
 }
 
+const MessageType = {
+  Warning: 0,
+  UserActorConfirm: 2,
+  Chat: 3,
+  Move: 4,
+  RoomCountChange: 6,
+  ObserverUpdate: 7,
+};
+
 const onGameWithFriend = async () => {
   if (verificationCodes.value.join('').length < 5) {
-    ElMessage.error("Veuillez entrer un numéro de salle valide")
-    return
+    ElMessage.error("Veuillez entrer un numéro de salle valide");
+    return;
   }
-  let res = await getUserInfo(id)
-  myInfo.value = res.data
-  friendDialogVisible.value = false
-  roomId.value = verificationCodes.value.join('')
+  await loadAndSetUserInfo();
+  const roomId = verificationCodes.value.join('');
+  initializeWebSocket(roomId);
+  friendDialogVisible.value = false;
+};
+
+const loadAndSetUserInfo = async () => {
+  const response = await getUserInfo(id);
+  myInfo.value = response.data;
+};
+
+const initializeWebSocket = (roomId) => {
   const url = new URL(baseURL)
   const hostAndPort = `${url.hostname}:${url.port}`
-  playSocket.value = new WebSocket(
-    'ws://' + hostAndPort + '/game/online/five/' + roomId.value + '/' + id
-  )
-  playSocket.value.onopen = (event) => {
-    console.log('socket open', event)
+  const wsUrl = `ws://${hostAndPort}/game/online/five/${roomId}/${id}`;
+  console.log("wsUrl", wsUrl);
+  playSocket.value = new WebSocket(wsUrl);
+  
+  playSocket.value.onopen = () => console.log("WebSocket connection established");
+  playSocket.value.onclose = handleSocketClose;
+  playSocket.value.onerror = (error) => console.error("WebSocket error:", error);
+  playSocket.value.onmessage = handleSocketMessage;
+  fullscreenLoading.value = true
+};
+
+const handleSocketClose = () => {
+  isGameing.value = false 
+  chatMessageInp.value = true 
+  stopTimer()
+  ElMessage.error('Connexion perdue');
+  router.push('/main/game')
+};
+
+const handleSocketMessage = (event) => {
+  const socketmessage = JSON.parse(event.data);
+  handleMessage(socketmessage);
+};
+
+const handleMessage = (socketmessage) => {
+  switch (socketmessage.type) {
+    case MessageType.Warning:
+      handleWarningMessage(socketmessage);
+      break;
+    case MessageType.UserActorConfirm:
+      handleUserActorConfirmMessage(socketmessage);
+      break;
+    case MessageType.Chat:
+      handleChatMessage(socketmessage);
+      break;
+    case MessageType.Move:
+      handleMoveMessage(socketmessage);
+      break;
+    case MessageType.RoomCountChange:
+      handleRoomCountChangeMessage(socketmessage);
+      break;
+    case MessageType.ObserverUpdate:
+      handleObserverUpdateMessage(socketmessage);
+      break;
+    default:
+      console.warn(`Unhandled message type: ${socketmessage.type}`);
   }
-  playSocket.value.onclose = () => {
-    isGameing.value = false // 不能下棋
-    chatMessageInp.value = true // 不能聊天
-    stopTimer() // 停止计时
-    ElMessage('Connexion perdue')
+};
+
+const handleWarningMessage = (message) => {
+  fullscreenLoading.value = false // Close the loading window
+  lookerDialogVisible.value = true // Open the observer selection window
+};
+
+const handleUserActorConfirmMessage = (message) => {
+  isGameing.value = true;
+  playerType.value = message.role;
+  gameId.value = message.gameId;
+  adjustGameStartState();
+};
+
+const adjustGameStartState = () => {
+  if (playerType.value === 'Joueur Blanc') {
+    isWait.value = true;
+    currentPlayer.value = 2;
+  } else {
+    isWait.value = false;
+    currentPlayer.value = 1;
   }
-  playSocket.value.onerror = (event) => {
-    console.log('error', event)
-  }
-  playSocket.value.onmessage = (event) => {
-    const obj = JSON.parse(event.data)
-    // console.log('obj', obj)
-    if (obj.type == 0) {
-      // 警告消息（表示当前房间用户超过两人了）——后端
-      fullscreenLoading.value = false // 关闭等待窗口
-      lookerDialogVisible.value = true // 打开是否观战选择窗口
-    } else if (obj.type == 2) {
-      // 标识本次返回的是用户的角色—后端
-      isGameing.value = true
-      playerType.value = obj.role
-      gameId.value = obj.gameId
-      if (playerType.value == '执白棋者') {
-        isWait.value = true
-        currentPlayer.value = 2
-      } else {
-        isWait.value = false
-        currentPlayer.value = 1
-      }
-      // init
-      fullscreenLoading.value = false // 关闭等待页面
-      const json = JSON.stringify({
-        type: 3,
-        role: playerType.value,
-        message: '-对战开始 -'
-      })
-      playSocket.value.send(json)
+  //initialization 
+  fullscreenLoading.value = false
+  addLogList({
+    name: myInfo.value.username,
+    message: '-Le combat commence-'
+  })
+  startTimer()
+};
+
+const handleChatMessage = (socketmessage) => {
+  if (myInfo.value.id != socketmessage.id) {
+    if (socketmessage.role == 'Joueur Noir') {
+      showBlackerMessage(socketmessage.message)
+    } else if (socketmessage.role == 'Joueur Blanc') {
+      showWhiterMessage(socketmessage.message)
+    } else {
       addLogList({
-        name: myInfo.value.username,
-        message: '-对战开始 -'
+        name: actors.value.filter((item) => item.id == socketmessage.id)[0].username,
+        message: socketmessage.message
       })
-      startTimer()
-    } else if (obj.type == 3) {
-      // 收到聊天消息
-      if (myInfo.value.id != obj.id) {
-        // 排除收到自己的广播
-        if (obj.role == '执黑棋者') {
-          showBlackerMessage(obj.message)
-        } else if (obj.role == '执白棋者') {
-          showWhiterMessage(obj.message)
-        } else {
-          addLogList({
-            name: actors.value.filter((item) => item.id == obj.id)[0].username,
-            message: obj.message
-          })
-        }
-      }
-    } else if (obj.type == 4) {
-      // 收到对手下棋的信息
-      let temp = obj.message.split(',')
-      const x = temp[0].substring(1)
-      const y = temp[1].substring(0, temp[1].length - 1)
-      if (playerType.value != '观战者') {
-        // 非观战者
-        if (obj.isGameOver == 0) {
-          if (obj.role != playerType.value) {
-            // 排除收到自己的广播
-            boardStates[x][y] = (currentPlayer.value % 2) + 1 // 下对手的棋子
-            isWait.value = false
-            
-          }
-        } else {
-          // 游戏结束 参与者视角
-          boardStates[x][y] = obj.role == '执黑棋者' ? 1 : 2
-          addLogList({
-            name: actors.value.filter(
-              (item) => item.role == (obj.isGameOver == 1 ? '执黑棋者' : '执白棋者')
-            )[0].username,
-            message: gameOverToCN(obj.isGameOver)
-          })
-          if (obj.isGameOver == 1) {
-            ElMessage.success(`游戏结束，执黑子者胜，您的房间将被断开`)
-          } else {
-            ElMessage.success(`游戏结束，执白子者胜，您的房间将被断开`)
-          }
-        }
-      } else {
-        // 观战者收到下棋消息
-        boardStates[x][y] = currentPlayer.value
-        currentPlayer.value = (currentPlayer.value % 2) + 1
-        if (obj.isGameOver != 0) {
-          // 游戏结束 观察者视角
-          addLogList({
-            name: actors.value.filter((item) => item.role == obj.role)[0].username,
-            message: gameOverToCN(obj.isGameOver)
-          })
-          if (obj.isGameOver == 1) {
-            ElMessage.success(`游戏结束，执黑子者胜，您的房间将被断开`)
-          } else {
-            ElMessage.success(`游戏结束，执白子者胜，您的房间将被断开`)
-          }
-        }
-      }
-    } else if (obj.type == 5) {
-      // 互动消息
-    } else if (obj.type == 6) {
-      // 房间人数变化消息
-      fullscreenLoading.value = false // 关闭等待窗口
-      // 渲染左信息框和观战者框
-      actors.value = obj.actors
-      setBlacker(obj.actors.filter((item) => item.role == '执黑棋者')[0])
-      setWhiter(obj.actors.filter((item) => item.role == '执白棋者')[0])
-    } else if (obj.type == 7) {
-      // 观察者后进入房间时用于渲染棋局
-      let num1 = 0,
-        num2 = 0
-      for (let i = 0; i < 15; i++) {
-        for (let j = 0; j < 15; j++) {
-          boardStates[i][j] = obj.message[i][j]
-          if (boardStates[i][j] == 1) {
-            num1++
-          } else if (boardStates[i][j] == 2) {
-            num2++
-          }
-        }
-      }
-      currentPlayer.value = num1 == num2 ? 1 : 2
     }
   }
-  // 第一个人创建棋局，等待好友进入
-  fullscreenLoading.value = true
-}
+};
+
+const handleGameOver = (message) => {
+  const winnerRole = message.isGameOver == 1 ? 'Joueur Noir' : 'Joueur Blanc';
+  const winnerMessage = `Le jeu est terminé, ${winnerRole} gagne et votre salle sera déconnectée`;
+  ElMessage.success(winnerMessage);
+  
+  const winnerName = actors.value.filter((item) => item.role == winnerRole)[0].username;
+  addLogList({ name: winnerName, message: gameOverToCN(message.isGameOver) });
+  router.push('/main/game')
+};
+
+const handleMoveMessage = (socketmessage) => {
+  let [x, y] = parseChessMove(socketmessage.message);
+  
+  if (playerType.value !== 'Spectateur') {
+    if (socketmessage.isGameOver == 0) {
+      if (socketmessage.role !== playerType.value) {
+        boardStates[x][y] = currentPlayer.value % 2 + 1;
+        isWait.value = false;
+      }
+    } else {
+      handleGameOver(socketmessage);
+    }
+  } else {
+    boardStates[x][y] = currentPlayer.value;
+    currentPlayer.value = currentPlayer.value % 2 + 1;
+    if (socketmessage.isGameOver != 0) {
+      handleGameOver(socketmessage);
+    }
+  }
+};
+
+const parseChessMove = (moveString) => {
+  const temp = moveString.split(',');
+  const x = parseInt(temp[0].substring(1), 10);
+  const y = parseInt(temp[1].substring(0, temp[1].length - 1), 10);
+  return [x, y];
+};
+
+const handleRoomCountChangeMessage = (message) => {
+  fullscreenLoading.value = false 
+  // Render the left information box and Spectator box
+  actors.value = message.actors
+  setBlacker(message.actors.filter((item) => item.role == 'Joueur Noir')[0])
+  setWhiter(message.actors.filter((item) => item.role == 'Joueur Blanc')[0])
+};
+
+const handleObserverUpdateMessage = (message) => {
+  let num1 = 0,
+    num2 = 0
+  for (let i = 0; i < 15; i++) {
+    for (let j = 0; j < 15; j++) {
+      boardStates[i][j] = message.message[i][j]
+      if (boardStates[i][j] == 1) {
+        num1++
+      } else if (boardStates[i][j] == 2) {
+        num2++
+      }
+    }
+  }
+  currentPlayer.value = num1 == num2 ? 1 : 2
+};
+
 window.onbeforeunload = () => {
   playSocket.value.close()
 }
-// 棋盘
+
 const showHover = reactive(
   Array(15)
     .fill()
     .map(() => Array(15).fill(false))
-) // 悬停状态数组
+) // Hover preview
 
 const sendMoveToServer = async (x, y) => {
-  // console.log(x, y)
   const json = JSON.stringify({
     type: 4,
     role: playerType.value,
     stepOrder: stepOrder.value,
     gameId: gameId.value,
     message: '(' + x + ',' + y + ')'
-  }) // 组装发送数据
+  }) // Send the move to the server
   playSocket.value.send(json)
 }
 const makeMove = (x, y) => {
-  // 更新棋盘状态的逻辑
-  if (boardStates[x][y] !== 0 || isWait.value || !isGameing.value) return // 下过棋或者在等待人机下棋都不能再次下棋了
+  if (boardStates[x][y] !== 0 || isWait.value || !isGameing.value) return 
 
-  boardStates[x][y] = currentPlayer.value // 玩家落子
+  boardStates[x][y] = currentPlayer.value 
   stepOrder.value++
   isWait.value = true
   
@@ -277,50 +310,42 @@ const makeMove = (x, y) => {
   }, 1100)
 }
 const handleMouseOver = (x, y) => {
-  // console.log('鼠标悬停', x, y)
   if (x >= 0 && x < 15 && y >= 0 && y < 15) {
     showHover[x][y] = 1
   }
 }
 const handleMouseLeave = (x, y) => {
-  // console.log('鼠标离开', x, y)
   if (x >= 0 && x < 15 && y >= 0 && y < 15) {
     showHover[x][y] = 0
   }
 }
 const isStarPosition = (x, y) => {
-  // 定义星位的坐标
   const starPositions = [
     { x: 3, y: 3 },
     { x: 3, y: 11 },
     { x: 11, y: 3 },
     { x: 11, y: 11 },
     { x: 7, y: 7 }
-    // 如果棋盘足够大，还可以添加中心点 { x: 7, y: 7 }
   ]
-  // 检查当前坐标是否是星位
   return starPositions.some((position) => position.x === x && position.y === y)
 }
 
-//气泡聊天
-const friendVisibled = ref(false)
-const friendMessage = ref('好友信息')
-const showWhiterMessage = async (message) => {
-  addLogList({
-    name: actors.value.filter((item) => item.role == '执白棋者')[0].username + '：',
-    message: message
-  })
-  friendMessage.value = message
-  friendVisibled.value = true
-  await setTimeout(() => {
-    friendVisibled.value = false
-  }, 5000)
-}
 const myVisibled = ref(false)
-const myMessage = ref('我的信息')
+const myMessage = ref('')
 const showBlackerMessage = async (message) => {
   addLogList({
-    name: actors.value.filter((item) => item.role == '执黑棋者')[0].username + '：',
+    name: actors.value.filter((item) => item.role == 'Joueur Noir')[0].username + '：',
+    message: message
+  })
+  myMessage.value = message
+  myVisibled.value = true
+  await setTimeout(() => {
+    myVisibled.value = false
+  }, 5000)
+}
+const showWhiterMessage = async (message) => {
+  addLogList({
+    name: actors.value.filter((item) => item.role == 'Joueur Blanc')[0].username + '：',
     message: message
   })
   myMessage.value = message
@@ -330,7 +355,6 @@ const showBlackerMessage = async (message) => {
   }, 5000)
 }
 
-// 日志
 const logList = ref([])
 const addLogList = (obj) => {
   logList.value.push(obj)
@@ -341,10 +365,9 @@ watch(logList.value, async () => {
   scroll.value.setScrollTop(2000000005)
 })
 
-// 发送聊天信息
 const sendChatMessage = (message) => {
   if (message == '') {
-    ElMessage.error('发送的消息不能为空')
+    ElMessage.error('Le message envoyé ne peut pas être vide')
     return
   }
   const json = JSON.stringify({
@@ -354,12 +377,12 @@ const sendChatMessage = (message) => {
   })
   playSocket.value.send(json)
 
-  if (playerType.value == '执黑棋者') {
+  if (playerType.value == 'Joueur Noir') {
     showBlackerMessage(message)
-  } else if (playerType.value == '执白棋者') {
+  } else if (playerType.value == 'Joueur Blanc') {
     showWhiterMessage(message)
   } else {
-    // 观战者
+    // Spectateur
     console.log('name', myInfo.value.username, 'message', message)
     addLogList({
       name: myInfo.value.username,
@@ -369,26 +392,26 @@ const sendChatMessage = (message) => {
   chatMessage.value = ''
 }
 
-// 取消观战
+// Cancel watching
 const noLooking = () => {
   playSocket.value.close()
-  verificationCodes.value = ['', '', '', '', ''] // 清空房间号输入框
-  friendDialogVisible.value = true // 打开输入房间号的对话框
-  lookerDialogVisible.value = false // 关闭选择是否观战的对话框
+  verificationCodes.value = ['', '', '', '', ''] // Clear room number input box
+  friendDialogVisible.value = true // Open the dialog box for entering the room number
+  lookerDialogVisible.value = false // Close the dialog box for selecting whether to watch
 }
-// 确定观战
+// Confirm watching
 const onLooking = () => {
   const json = JSON.stringify({
     type: '1'
   })
   playSocket.value.send(json)
-  playerType.value = '观战者'
-  sendChatMessage('进入房间') // 发送 进入房间 信息
-  isGameing.value = false // 不能下棋
-  lookerDialogVisible.value = false // 关闭选择是否观战窗口
+  playerType.value = 'Spectateur'
+  sendChatMessage('Entrez dans la salle')
+  isGameing.value = false
+  lookerDialogVisible.value = false
 }
 
-// 用于渲染左边信息框
+// Black and white information
 const blacker = ref({})
 const whiter = ref({})
 const setBlacker = (data) => {
@@ -407,7 +430,7 @@ const onOut = () => {
   <div class="background">
     <el-image src="/img/5f645ca6aaab51600412838423.jpg" />
   </div>
-  <!-- 输入房间号 -->
+  <!-- entrer le numéro de la salle -->
   <div style="position: relative; z-index: 2030">
     <el-dialog
       v-model="friendDialogVisible"
@@ -418,7 +441,7 @@ const onOut = () => {
       :close-on-press-escape="false"
     >
       <template #title>
-        <span style="font-size: 30px">请输入房间号</span>
+        <span style="font-size: 30px">Veuillez entrer le numéro de la salle</span>
       </template>
 
       <div class="verification-container">
@@ -435,15 +458,15 @@ const onOut = () => {
 
       <template #footer>
         <span>
-          <el-button @click="router.push('/main/game')">取消</el-button>
-          <el-button type="primary" @click="onGameWithFriend"> 确定 </el-button>
+          <el-button @click="router.push('/main/game')">Annuler</el-button>
+          <el-button type="primary" @click="onGameWithFriend"> Confirmer </el-button>
         </span>
       </template>
     </el-dialog>
   </div>
 
   <div style="position: relative; z-index: 1">
-    <!-- 是否观战 -->
+    <!-- if watching -->
     <el-dialog
       v-model="lookerDialogVisible"
       width="31%"
@@ -453,28 +476,28 @@ const onOut = () => {
       :close-on-press-escape="false"
     >
       <template #title>
-        <span style="font-size: 30px">房间满员，是否观战？</span>
+        <span style="font-size: 30px">La salle est pleine, vous voulez voir le match ?</span>
       </template>
 
       <template #footer>
         <span>
-          <el-button @click="noLooking">取消</el-button>
-          <el-button type="primary" @click="onLooking"> 确定 </el-button>
+          <el-button @click="noLooking">Annuler</el-button>
+          <el-button type="primary" @click="onLooking"> Confirmer </el-button>
         </span>
       </template>
     </el-dialog>
 
     <div style="text-align: center; margin-top: 100px">
-      <!-- 观战者框 -->
+      <!-- Spectateur框 -->
       <div class="lookerBox">
-        <div v-show="actors.length != 0">观战中</div>
+        <div v-show="actors.length != 0">Watching</div>
         <el-scrollbar>
           <div style="display: flex">
             <div
               class="lookingItem"
               v-for="item in actors"
               :key="item"
-              v-show="item.role == '观战者'"
+              v-show="item.role == 'Spectateur'"
             >
               <el-avatar size="large" :src="item.imageUrl" />
               <div>
@@ -486,17 +509,17 @@ const onOut = () => {
       </div>
     </div>
     <div
-      class="gomoku-container"
+      class="five-container"
       v-loading.fullscreen.lock="fullscreenLoading"
       customClass="loading"
-      :element-loading-text="'等待好友进入房间：' + roomId"
+      :element-loading-text="'Attendez que vos amis entrent dans la salle：' + roomId"
     >
       <div style="flex-grow: 1"></div>
-      <!-- 左侧信息框 -->
+      <!-- Information box on the left -->
       <el-card>
         <div style="line-height: 50px">
           <div>
-            <!-- 黑棋 -->
+            <!-- noir -->
             <div class="topShow">
               <div>{{ blacker.username }}</div>
             </div>
@@ -506,34 +529,34 @@ const onOut = () => {
               <div style="flex-grow: 1"></div>
               <div
                 v-show="
-                  (isWait && playerType == '执白棋者') ||
-                  (!isWait && playerType == '执黑棋者') ||
-                  (currentPlayer == 1 && playerType == '观战者')
+                  (isWait && playerType == 'Joueur Blanc') ||
+                  (!isWait && playerType == 'Joueur Noir') ||
+                  (currentPlayer == 1 && playerType == 'Spectateur')
                 "
                 style="font-size: 35px; margin-right: 10px"
               >
                 =>
               </div>
-              <el-image style="width: 50px; height: 50px" :src="blackUrl" :fit="fit" />
+              <el-image style="width: 50px; height: 50px" :src="blackUrl" />
               <div style="flex-grow: 1"></div>
             </div>
           </div>
           <div style="text-align: center; font-size: 60px">VS</div>
           <div>
-            <!-- 白棋 -->
+            <!-- white -->
             <div class="check">
               <div style="flex-grow: 1"></div>
               <div
                 v-show="
-                  (isWait && playerType == '执黑棋者') ||
-                  (!isWait && playerType == '执白棋者') ||
-                  (currentPlayer == 2 && playerType == '观战者')
+                  (isWait && playerType == 'Joueur Noir') ||
+                  (!isWait && playerType == 'Joueur Blanc') ||
+                  (currentPlayer == 2 && playerType == 'Spectateur')
                 "
                 style="font-size: 35px; margin-right: 10px"
               >
                 =>
               </div>
-              <el-image style="width: 50px; height: 50px" :src="whiteUrl" :fit="fit" />
+              <el-image style="width: 50px; height: 50px" :src="whiteUrl" />
               <div style="flex-grow: 1"></div>
             </div>
           </div>
@@ -544,12 +567,12 @@ const onOut = () => {
           </div>
         </div>
       </el-card>
-      <!-- 棋盘 -->
+      <!-- chessboard -->
       <span style="margin-left: 200px">
-        <div class="gomoku-board">
-          <!-- 遍历棋盘上的每个交叉点 -->
+        <div class="five-board">
+          <!-- Traverse every intersection on the board -->
           <div class="board-row" v-for="(row, x) in boardStates" :key="x">
-            <!-- 遍历行中的每个交叉点 -->
+            <!-- Iterate over every intersection in the row -->
             <div
               class="board-cell"
               v-for="(cell, y) in row"
@@ -558,15 +581,15 @@ const onOut = () => {
               @mouseover="() => handleMouseOver(x, y)"
               @mouseleave="() => handleMouseLeave(x, y)"
             >
-              <!-- 星位的标记 -->
+              <!-- star mark -->
               <div v-if="isStarPosition(x, y)" class="star-position"></div>
-              <!-- 悬停预览 -->
+              <!-- Hover preview -->
               <div
                 v-if="showHover[x][y]"
                 class="hover-preview"
                 :class="currentPlayer == 1 ? 'black-piece' : 'white-piece'"
               ></div>
-              <!-- 实际棋子 -->
+              <!-- actual chess pieces -->
               <img
                 v-if="cell === 1"
                 src="/assets/pieces/black.png"
@@ -579,22 +602,21 @@ const onOut = () => {
                 class="pieces"
                 alt="White Piece"
               />
-              <!-- 悬停预览、实际棋子等 -->
             </div>
           </div>
         </div>
       </span>
 
-      <!-- 右侧信息框 -->
+      <!-- Information box on the right -->
       <el-card style="margin-left: 90px">
         <div class="infoBox" style="width: 400px">
           <el-card>
             <div class="count">
               <div>
-                <span>回合数</span><span>{{ stepOrder }}</span>
+                <span>Nombre de tours</span><span>{{ stepOrder }}</span>
               </div>
               <div>
-                <span>游戏时间</span><span>{{ formatTime }}</span>
+                <span>Temps de jeu</span><span>{{ formatTime }}</span>
               </div>
             </div>
           </el-card>
@@ -615,7 +637,7 @@ const onOut = () => {
               <el-input
                 :disabled="chatMessageInp"
                 v-model="chatMessage"
-                placeholder="说点什么吧..."
+                placeholder="dire quelque chose..."
               >
                 <template #append>
                   <el-button type="success" @click="sendChatMessage(chatMessage)">
@@ -633,15 +655,15 @@ const onOut = () => {
     </div>
   </div>
   <el-popconfirm
-    title="你确定要退出吗？"
-    confirm-button-text="确定"
-    cancel-button-text="取消"
+    title="Êtes-vous sûr de vouloir quitter?"
+    confirm-button-text="Confirmer"
+    cancel-button-text="Annuler"
     width="200"
     @confirm="onOut"
   >
     <template #reference>
       <el-button style="position: fixed; right: 160px; bottom: 50px; z-index: 2010" type="danger"
-        >退出</el-button
+        >quitter</el-button
       >
     </template>
   </el-popconfirm>
@@ -707,7 +729,7 @@ const onOut = () => {
   box-shadow: 0 0 5px #007bff;
 }
 
-.gomoku-container {
+.five-container {
   display: flex;
 }
 .el-loading-mask >>> {
@@ -731,9 +753,6 @@ const onOut = () => {
   text-align: center;
 }
 
-.friendMessage {
-  font-size: 20px;
-}
 
 .myMessage {
   font-size: 20px;
@@ -754,7 +773,7 @@ const onOut = () => {
   justify-content: space-between;
 }
 
-.gomoku-board {
+.five-board {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -817,17 +836,12 @@ const onOut = () => {
 .star-position {
   position: absolute;
   width: 10px;
-  /* 星位的大小 */
   height: 10px;
   background-color: black;
-  /* 星位的颜色 */
   border-radius: 50%;
-  /* 使其成为圆点 */
-  /* 将星位定位到交叉点的中心 */
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  /* 确保星位在线条之上 */
   z-index: 2;
 }
 
@@ -836,26 +850,19 @@ const onOut = () => {
   position: absolute;
   top: 50%;
   left: -5px;
-  /* 向左延伸10px */
   right: -5px;
-  /* 向右延伸10px */
   height: 1px;
-  /* 线条宽度 */
   background-color: #333;
-  /* 线条颜色 */
 }
 
 .board-cell::before,
 .board-cell::after {
-  /* 其他样式保持不变 */
   z-index: 99;
-  /* 将线条置于背景之下 */
 }
 
 .board-cell img {
   position: absolute;
   z-index: 100;
-  /* 确保棋子在线条之上 */
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -866,49 +873,38 @@ const onOut = () => {
   position: absolute;
   left: 50%;
   top: -4px;
-  /* 向上延伸10px */
   bottom: -4px;
-  /* 向下延伸10px */
   width: 1px;
-  /* 线条宽度 */
   background-color: #333;
-  /* 线条颜色 */
 }
 
-.gomoku-board::before,
-.gomoku-board::after {
+.five-board::before,
+.five-board::after {
   content: '';
   position: absolute;
   background-color: #333;
-  /* 边界线条的颜色 */
   z-index: 1;
 }
 
-/* 棋盘顶部和底部的边界线 */
-.gomoku-board::before {
+.five-board::before {
   top: 0;
   right: 0;
   left: 0;
   height: 1px;
-  /* 边界线条的厚度 */
 }
 
-.gomoku-board::after {
+.five-board::after {
   bottom: 0;
   right: 0;
   left: 0;
   height: 1px;
-  /* 边界线条的厚度 */
 }
 
-/* 棋盘左侧和右侧的边界线 */
-/* 为了不与已有的::before和::after伪元素冲突，我们可以选择添加到.board-row */
 .board-row::before,
 .board-row::after {
   content: '';
   position: absolute;
   background-color: #333;
-  /* 边界线条的颜色 */
   z-index: 1;
 }
 
@@ -917,7 +913,6 @@ const onOut = () => {
   bottom: 0;
   left: 0;
   width: 1px;
-  /* 边界线条的厚度 */
 }
 
 .board-row::after {
@@ -925,6 +920,5 @@ const onOut = () => {
   bottom: 0;
   right: 0;
   width: 1px;
-  /* 边界线条的厚度 */
 }
 </style>

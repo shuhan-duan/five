@@ -75,7 +75,7 @@ init()
     z-index: 1;
     background-color: transparent;
     border-radius: 50px;
-    height: 580px;
+    height: 200px;
 }
 
 .menu {

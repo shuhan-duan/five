@@ -100,8 +100,8 @@ const MessageType = {
   UserActorConfirm: 2,
   Chat: 3,
   Move: 4,
-  RoomCountChange: 6,
-  ObserverUpdate: 7,
+  RoomCountChange: 5,
+  ObserverUpdate: 6,
 };
 
 const onGameWithFriend = async () => {

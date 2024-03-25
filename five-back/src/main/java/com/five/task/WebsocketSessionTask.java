@@ -44,7 +44,6 @@ public class WebsocketSessionTask {
             Long roomId = roomEntry.getKey(); // Room ID
             ConcurrentHashMap<Long, OnlineFiveActor> userSessions = roomEntry.getValue();
 
-            // Perform validation logic here
             GameHistory gameHistory = gameHistoryMapper.selectByRoomId(roomId);
 
             if (gameHistory != null) {

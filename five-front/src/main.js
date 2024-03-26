@@ -12,14 +12,12 @@ import '@/assets/main.css'
 
 const app = createApp(App)
 
-// 全局注册ElementPlus图标组件
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }
 
 const pinia = createPinia()
 
-// 使用Pinia插件实现状态持久化
 pinia.use(persist)
 
 app.use(pinia)

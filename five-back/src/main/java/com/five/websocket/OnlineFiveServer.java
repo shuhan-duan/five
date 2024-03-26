@@ -97,9 +97,20 @@ public class OnlineFiveServer {
 
     private void startGameInRoom(Long roomId) {
         ConcurrentHashMap<Long, OnlineFiveActor> map = roomSessions.get(roomId);
-        List<Long> userIds = new ArrayList<>(map.keySet());
-        Long blackId = userIds.get(0);
-        Long whiteId = userIds.size() > 1 ? userIds.get(1) : null; // Prevents the case of having only one user
+
+        Long blackId = null;
+        Long whiteId = null;
+
+        for (Map.Entry<Long, OnlineFiveActor> entry : map.entrySet()) {
+            Long userId = entry.getKey();
+            OnlineFiveActor actor = entry.getValue();
+
+            if ("Joueur Noir".equals(actor.getRole())) {
+                blackId = userId;
+            } else if ("Joueur Blanc".equals(actor.getRole())) {
+                whiteId = userId;
+            }
+        }
 
         Session blackSession = map.get(blackId).getSession();
         Session whiteSession = whiteId != null ? map.get(whiteId).getSession() : null;
@@ -113,9 +124,9 @@ public class OnlineFiveServer {
         gameHistoryMapper.insert(gameHistory);
 
         if (whiteSession != null) {
-            sendUserActorMessage(whiteSession, "Joueur Blanc", gameHistory.getId());
+            sendUserActorMessage(whiteSession, "Joueur Blanc", gameHistory.getId(),whiteId);
         }
-        sendUserActorMessage(blackSession, "Joueur Noir", gameHistory.getId());
+        sendUserActorMessage(blackSession, "Joueur Noir", gameHistory.getId(),blackId);
         sendToAllUserForRoomCount(roomId);
     }
 
@@ -141,6 +152,21 @@ public class OnlineFiveServer {
         sendToAllUserForRoomCount(roomId);
         sendToAllUserForObserver(roomId, userId, session);
         log.info("The current room id is: {}, the user joining the room is {} and is an Observer", roomId, userId);
+    }
+
+    private void printBoards(Long roomId) {
+        Integer[][] board = roomBoards.get(roomId);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n");
+
+        for (Integer[] integers : board) {
+            for (Integer integer : integers) {
+                sb.append(integer == null ? "-" : integer).append(" ");
+            }
+            sb.append("\n");
+        }
+        log.info("board:" + sb);
     }
 
     private void handleMove(Long roomId, Long userId, OnlineFiveMessage onlineFiveMessage) {
@@ -171,7 +197,7 @@ public class OnlineFiveServer {
         String steps = onlineFiveMessage.getMessage();
         String cleanedSteps = steps.replaceAll("[()]", ""); // Remove parentheses
         String[] split = cleanedSteps.split(","); // Split by comma
-        int color = Objects.equals(onlineFiveMessage.getRole(), "Black Player") ? 1 : 2;// Get the color
+        int color = Objects.equals(onlineFiveMessage.getRole(), "Joueur Noir") ? 1 : 2;// Get the color
         board[Integer.parseInt(split[0])][Integer.parseInt(split[1])] = color;// Update the state of the board
     }
 
@@ -329,17 +355,19 @@ public class OnlineFiveServer {
     }
 
     // This method sends a message to the user to confirm entrance to the room and assign a role
-    private void sendUserActorMessage(Session session, String role, Long gameId) {
+    private void sendUserActorMessage(Session session, String role, Long gameId ,Long userId) {
         if (session != null && session.isOpen()) {
             HashMap<String, Object> map = new HashMap<>();
+            map.put("userId", userId);
             map.put("type", USER_ACTOR_CONFIRM.getValue());
             map.put("role", role);
             map.put("gameId", gameId);
             try {
                 String jsonMessage = objectMapper.writeValueAsString(map);
+                log.info("Sending role confirmation message to the user: {}", jsonMessage);
                 session.getBasicRemote().sendText(jsonMessage);
             } catch (IOException e) {
-                log.error("Exception occurred while sending role confirmation message to the user{}: {}",role,e.getMessage(), e);
+                log.error("Exception occurred while sending role confirmation message to the user {}: {}",role,e.getMessage(), e);
             }
         }
     }

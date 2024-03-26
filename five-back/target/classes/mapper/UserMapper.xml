@@ -14,10 +14,10 @@
         <set>
             <if test="username != null">username = #{username},</if>
             <if test="password != null">password = #{password},</if>
-            <if test="gameTotalCounts != null">game_total_counts = #{game_total_counts},</if>
-            <if test="gameSuccessCounts != null">game_success_counts = #{game_success_counts},</if>
-            <if test="gameFailCounts != null">game_fail_counts = #{game_fail_counts},</if>
-            <if test="gameDeadHeatCounts != null">game_dead_heat_counts = #{game_dead_heat_counts},</if>
+            <if test="game_total_counts != null">game_total_counts = #{game_total_counts},</if>
+            <if test="game_success_counts != null">game_success_counts = #{game_success_counts},</if>
+            <if test="game_fail_counts != null">game_fail_counts = #{game_fail_counts},</if>
+            <if test="game_dead_heat_counts != null">game_dead_heat_counts = #{game_dead_heat_counts},</if>
             <if test="deleted != null">deleted = #{deleted},</if>
         </set>
         WHERE id = #{id}

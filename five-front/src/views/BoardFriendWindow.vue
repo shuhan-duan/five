@@ -15,7 +15,7 @@ const boardStates = reactive(
 
 const stepOrder = ref(1) // Current step number
 const gameId = ref(-1) // Game ID, obtained from the backend
-const currentPlayer = ref(1) // 1 represents black chess, 2 represents white chess
+const currentPlayer = ref(0) // 1 represents black chess, 2 represents white chess , 0 represents spectator
 const userIderStore = useUserIderStore()
 const id = userIderStore.userInfo.id // My ID
 const myInfo = ref({}) // My personal information
@@ -138,7 +138,6 @@ const handleSocketClose = () => {
   isGameing.value = false 
   chatMessageInp.value = true 
   stopTimer()
-  ElMessage.error('Connexion perdue');
   router.push('/main/game')
 };
 
@@ -195,7 +194,7 @@ const adjustGameStartState = () => {
   //initialization 
   fullscreenLoading.value = false
   addLogList({
-    name: myInfo.value.username,
+    name: 'Système',
     message: '-Le combat commence-'
   })
   startTimer()
@@ -217,7 +216,7 @@ const handleChatMessage = (socketmessage) => {
 };
 
 const handleGameOver = (message) => {
-  const winnerRole = message.isGameOver == 1 ? 'Joueur Noir' : 'Joueur Blanc';
+  const winnerRole = message.role;
   const winnerMessage = `Le jeu est terminé, ${winnerRole} gagne et votre salle sera déconnectée`;
   ElMessage.success(winnerMessage);
   
@@ -499,7 +498,6 @@ const onOut = () => {
               :key="item"
               v-show="item.role == 'Spectateur'"
             >
-              <el-avatar size="large" :src="item.imageUrl" />
               <div>
                 <div>{{ item.username }}</div>
               </div>

@@ -19,10 +19,7 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
     @Autowired
     private JwtTokenInterceptor jwtTokenInterceptor;
 
-    @Autowired
-    private ObjectMapper objectMapper;
 
-    
     public void addInterceptors(InterceptorRegistry registry) {
         log.info("Start registering custom interceptor...");
         registry.addInterceptor(jwtTokenInterceptor)

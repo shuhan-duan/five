@@ -43,4 +43,3 @@ mvn clean package           # Build the project and package it into a JAR file
 cd target                   # Navigate to the directory containing the built JAR
 java -jar jarFileName.jar   # Replace jarFileName.jar with the actual name of the JAR file
 ```
-## Running 

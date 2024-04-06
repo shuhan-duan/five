@@ -6,8 +6,8 @@ import 'element-plus/theme-chalk/el-loading.css'
 import 'element-plus/theme-chalk/el-message.css'
 
 // Interceptors
-// let baseURL = 'http://localhost:8080/api'
-let baseURL = 'http://192.168.1.185:8080/api'
+let baseURL = 'http://localhost:8080/api'
+// let baseURL = 'http://your_IP:8080/api'
 
 
 const instance = axios.create({
